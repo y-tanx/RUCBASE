@@ -42,6 +42,6 @@ class LRUReplacer : public Replacer {
    private:
     std::mutex latch_;                  // 互斥锁
     std::list<frame_id_t> LRUlist_;     // 按加入的时间顺序存放unpinned pages的frame id，首部表示最近被访问
-    std::unordered_map<frame_id_t, std::list<frame_id_t>::iterator> LRUhash_;   // frame_id_t -> unpinned pages的frame id
+    std::unordered_map<frame_id_t, std::list<frame_id_t>::iterator> LRUhash_;   // frame_id_t -> unpinned pages的frame id，根据frame_id直接获得它在链表中的节点
     size_t max_size_;   // 最大容量（与缓冲池的容量相同）
 };

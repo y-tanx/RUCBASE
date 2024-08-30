@@ -34,7 +34,7 @@ struct RmPageHandle {
         slots = bitmap + file_hdr->bitmap_size;
     }
 
-    // 返回指定slot_no的slot存储收地址
+    // 返回指定slot_no的slot存储收地址，元组的位置：(page_no, slot_no)，这个函数是用于获得一个记录的起始位置
     char* get_slot(int slot_no) const {
         return slots + slot_no * file_hdr->record_size;  // slots的首地址 + slot个数 * 每个slot的大小(每个record的大小)
     }
