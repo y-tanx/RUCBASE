@@ -32,7 +32,8 @@ bool LRUReplacer::victim(frame_id_t* frame_id) {
         frame_id = nullptr;
         return false;
     }
-    // 牺牲LRUlist_的最后一个节点对应的frame
+    // 牺牲LRUlist_的最后一个节点对应的frame，LRUlist_记录的是unpinned page，即没有被其他进程调用的page
+    // LRUhash_记录page所在的framei_id - LRUlist_中对应的节点迭代器
     *frame_id = LRUlist_.back();
     // 从链表和hash表中删除最后这个节点
     LRUlist_.pop_back();
@@ -51,7 +52,7 @@ void LRUReplacer::pin(frame_id_t frame_id) {
     // 固定指定id的frame
     // 在数据结构中移除该frame
 
-    // 首先检查frame_id是否在链表中（unpin的page），如果在，则从链表和hash中删除
+    // 首先检查frame_id是否在链表中（unpin的page），如果在，则从链表和hash中删除。这个pin函数只是对LRUlist_和LRUhash_做了处理
     auto it = LRUhash_.find(frame_id);
     if(it != LRUhash_.end())
     {
@@ -69,6 +70,8 @@ void LRUReplacer::unpin(frame_id_t frame_id) {
     //  支持并发锁
     //  选择一个frame取消固定，应该是pin_count = 0
     std::scoped_lock lock{latch_};
+    // 首先检查frame_id是否在LRUlist_中，如果不在，则将它加入到LRUlist_和LRUhash_中
+    // 这个unpin函数是针对pin_count = 0的page，只有pin_count = 0的page才能调用该函数，将page加入到LRUlist_中
     auto it = LRUhash_.find(frame_id);
     if(it == LRUhash_.end())
     {
