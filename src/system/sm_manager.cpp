@@ -198,7 +198,21 @@ void SmManager::drop_table(const std::string& tab_name, Context* context) {
  * @param {Context*} context
  */
 void SmManager::create_index(const std::string& tab_name, const std::vector<std::string>& col_names, Context* context) {
-    
+    auto& tab_meta = db_.get_table(tab_name);
+    IndexMeta index_meta = {tab_name};
+    std::vector<ColMeta> &col_meta = index_meta.cols;
+    for (auto& col : col_names) {
+        auto it = tab_meta.get_col(col);
+        col_meta.push_back(*it);
+        index_meta.col_tot_len += it->len;
+        index_meta.col_num ++ ;
+    }
+    if (context && !context->lock_mgr_->lock_exclusive_on_table(context->txn_, disk_manager_->get_path2fd(tab_name)))
+        throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::LOCK_ON_SHIRINKING);
+    ix_manager_->create_index(tab_name, col_meta);
+    tab_meta.indexes.push_back(index_meta);
+    ihs_[ix_manager_->get_index_name(tab_name, col_meta)] = ix_manager_->open_index(tab_name, col_meta);
+    flush_meta();
 }
 
 /**

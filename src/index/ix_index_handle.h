@@ -35,7 +35,7 @@ inline int ix_compare(const char *a, const char *b, ColType type, int col_len) {
             throw InternalError("Unexpected data type");
     }
 }
-
+// a == b，返回0；a > b，返回1；a < b，返回-1
 inline int ix_compare(const char* a, const char* b, const std::vector<ColType>& col_types, const std::vector<int>& col_lens) {
     int offset = 0;
     for(size_t i = 0; i < col_types.size(); ++i) {
@@ -126,6 +126,14 @@ class IxNodeHandle {
     void erase_pair(int pos);
 
     int remove(const char *key);
+    // 创建一个节点后，初始化该节点
+    void init_node()
+    {
+        this->page_hdr->next_free_page_no = IX_NO_PAGE;
+        this->page_hdr->is_leaf = false;
+        this->page_hdr->num_key = 0;
+        this->page_hdr->parent = IX_NO_PAGE;
+    }
 
     /**
      * @brief used in internal node to remove the last key in root node, and return the last child
