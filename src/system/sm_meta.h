@@ -80,6 +80,9 @@ struct TabMeta {
 
     /* 判断当前表中是否存在名为col_name的字段 */
     bool is_col(const std::string &col_name) const {
+        // 使用lambda表达式进行条件判断，find_if查找第一个满足给定条件的元素，&捕获当前作用域中所有变量，以引用的方式传递给lambda表达式，col是传递进来的ColMeta类型的对象
+        // 这里表示从cols容器中遍历时，每个元素都会传递给lambda进行检查，然后对于传入的每个col，比较其name和col_name。pos将指向符合该条件的第一个元素
+        // 由于std::find_if会解引用迭代器，将解引用后的元素传递给lamdba，因此传入的是ColMeta类型的对象,而不是迭代器本身
         auto pos = std::find_if(cols.begin(), cols.end(), [&](const ColMeta &col) { return col.name == col_name; });
         return pos != cols.end();
     }
@@ -161,7 +164,7 @@ class DbMeta {
 
    private:
     std::string name_;                      // 数据库名称
-    std::map<std::string, TabMeta> tabs_;   // 数据库中包含的表
+    std::map<std::string, TabMeta> tabs_;   // 数据库中包含的表，表名-表的元数据
 
    public:
     // DbMeta(std::string name) : name_(name) {}

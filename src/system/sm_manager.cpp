@@ -26,7 +26,7 @@ See the Mulan PSL v2 for more details. */
  */
 bool SmManager::is_dir(const std::string& db_name) {
     struct stat st;
-    return stat(db_name.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+    return stat(db_name.c_str(), &st) == 0 && S_ISDIR(st.st_mode);  // 检查名为db_name的文件是否存在（stat获取文件状态），同时判断db_name是否为一个文件夹(S_ISDIR)
 }
 
 /**
@@ -85,7 +85,32 @@ void SmManager::drop_db(const std::string& db_name) {
  * @param {string&} db_name 数据库名称，与文件夹同名
  */
 void SmManager::open_db(const std::string& db_name) {
-    
+    // 首先打开数据库对应的文件夹，加载数据库元数据
+    if(!is_dir(db_name.c_str()))
+    {
+        throw DatabaseNotFoundError(db_name.c_str());
+    }
+    // 进入db_name文件目录下
+    if(chdir(db_name.c_str()) < 0)
+    {
+        throw UnixError();
+    }
+    // 打开数据库文件，并加载元数据到db_
+    std::ifstream ifs(DB_META_NAME);
+    ifs >> db_; // 加载数据库元数据
+    ifs.close();
+    // 打开表文件和索引文件，同时更新fhs_和ihs_
+    for(auto& entry : db_.tabs_)
+    {
+        auto& tab = entry.second;   // 获得表的元数据
+        fhs_[tab.name] = rm_manager_->open_file(tab.name);  // 加入tab.name - tab的RmFileHandle
+        // 每个表上可能有多个索引，因此遍历打开表上的索引文件
+        for(auto index : tab.indexes)
+        {
+            std::string index_name = ix_manager_->get_index_name(tab.name, tab.cols);
+            ihs_[index_name] = ix_manager_->open_index(tab.name, index.cols);   // 加入index_name - 对应的IxHandle
+        }
+    }
 }
 
 /**
@@ -101,7 +126,28 @@ void SmManager::flush_meta() {
  * @description: 关闭数据库并把数据落盘
  */
 void SmManager::close_db() {
-    
+    // 首先将数据库元数据写回文件DB_META_NAME
+    std::ofstream ofs(DB_META_NAME);
+    ofs << db_;
+    // 然后清理db_，让系统知道db_重置了
+    db_.name_.clear();
+    db_.tabs_.clear();
+    // 关闭数据库表文件和索引文件
+    for(auto& entry : fhs_)
+    {
+        rm_manager_->close_file(entry.second.get());     
+    }
+    fhs_.clear();
+    for(auto& entry : ihs_)
+    {
+        ix_manager_->close_index(entry.second.get());
+    }
+    ihs_.clear();
+    // 回到根目录
+    if(chdir("..") < 0)
+    {
+        throw UnixError();
+    }
 }
 
 /**
@@ -188,7 +234,20 @@ void SmManager::create_table(const std::string& tab_name, const std::vector<ColD
  * @param {Context*} context
  */
 void SmManager::drop_table(const std::string& tab_name, Context* context) {
-    
+    // 删除表，需要关闭并删除记录文件和索引文件，最后在ihs_和fhs_中删除该表有关的信息
+    TabMeta &tab = db_.get_table(tab_name);
+    // 删除记录文件
+    rm_manager_->close_file(fhs_[tab.name].get());
+    rm_manager_->destroy_file(tab_name);
+    // 删除索引文件
+    for(auto& index : tab.indexes)
+    {
+        drop_index(tab_name, index.cols, context);
+    }
+    // 删除fhs_和ihs_中的记录
+    db_.tabs_.erase(tab_name);
+    fhs_.erase(tab_name);   // ihs_在drop_index中删除了，不需要在此删除
+    flush_meta();   // 写回到文件中
 }
 
 /**
@@ -222,7 +281,17 @@ void SmManager::create_index(const std::string& tab_name, const std::vector<std:
  * @param {Context*} context
  */
 void SmManager::drop_index(const std::string& tab_name, const std::vector<std::string>& col_names, Context* context) {
-    
+    // 关闭索引文件然后删除它，清空ihs_中对应的index
+    std::string index_name = ix_manager_->get_index_name(tab_name, col_names);
+    // 关闭并删除索引文件
+    ix_manager_->close_index(ihs_[index_name].get());
+    ix_manager_->destroy_index(tab_name, col_names);
+    // 更新表的indexe和ihs_
+    TabMeta& tab = db_.get_table(tab_name);
+    tab.indexes.erase(tab.get_index_meta(col_names));
+    ihs_.erase(index_name);
+    // 写回文件
+    flush_meta();
 }
 
 /**
@@ -232,5 +301,11 @@ void SmManager::drop_index(const std::string& tab_name, const std::vector<std::s
  * @param {Context*} context
  */
 void SmManager::drop_index(const std::string& tab_name, const std::vector<ColMeta>& cols, Context* context) {
-    
+    // 根据元数据删除索引
+    std::vector<std::string> col_names;
+    for(auto& col : cols)
+    {
+        col_names.push_back(col.name);  // 记录索引名称
+    }
+    drop_index(tab_name, col_names, context);
 }
