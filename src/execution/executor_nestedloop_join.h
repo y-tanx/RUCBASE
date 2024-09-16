@@ -28,9 +28,12 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
    public:
     NestedLoopJoinExecutor(std::unique_ptr<AbstractExecutor> left, std::unique_ptr<AbstractExecutor> right, 
                             std::vector<Condition> conds) {
+        // 设置左右孩子
         left_ = std::move(left);
         right_ = std::move(right);
+        // 连接结果元组的长度，为了分配足够空间，用笛卡尔积连接后的元组长度为len_
         len_ = left_->tupleLen() + right_->tupleLen();
+        // 左孩子是outer table
         cols_ = left_->cols();
         auto right_cols = right_->cols();
         for (auto &col : right_cols) {
@@ -49,40 +52,33 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
 
     const std::vector<ColMeta> &cols() const override { return cols_; }
 
+    
     void beginTuple() override {
-        // 初始化左右孩子
         left_->beginTuple();
-        right_->beginTuple();
-        while(!is_end())
-        {
-            if(eval_conds(cols_, fed_conds_, left_->Next().get(), right_->Next().get()))
-            {
-                break;
-            }
-            right_->nextTuple();
-            if(right_->is_end())    // 左孩子next，右孩子重新开始比较
-            {
-                left_->nextTuple();
-                right_->beginTuple();   
-            }
+        if (left_->is_end()) {
+            return;
         }
-
+        right_->beginTuple();
+        filter_next_tuple();
     }
 
     void nextTuple() override {
         right_->nextTuple();
-        if(right_->is_end())
-        {
+        if (right_->is_end()) {
             left_->nextTuple();
             right_->beginTuple();
         }
-        while(!is_end())
-        {
-            if(eval_conds(cols_, fed_conds_, left_->Next().get(), right_->Next().get()))
+        filter_next_tuple();
+    }
+
+    // 过滤符合条件的元组
+    void filter_next_tuple() {
+        while (!is_end()) {
+            if (eval_conds(cols_, fed_conds_, left_->Next().get(), right_->Next().get())) {
                 break;
+            }
             right_->nextTuple();
-            if(right_->is_end())
-            {
+            if (right_->is_end()) {
                 left_->nextTuple();
                 right_->beginTuple();
             }
@@ -91,11 +87,13 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
 
     std::unique_ptr<RmRecord> Next() override {
         auto record = std::make_unique<RmRecord>(len_);
-        auto left_rec = left_->Next();
-        auto right_rec = right_->Next();
+        // auto left_rec = left_->Next();
+        // auto right_rec = right_->Next();
 
-        memcpy(record->data, left_rec->data, left_rec->size);
-        memcpy(record->data + left_rec->size, right_rec->data, right_rec->size);
+        // memcpy(record->data, left_rec->data, left_rec->size);
+        // memcpy(record->data + left_rec->size, right_rec->data, right_rec->size);
+        memcpy(record->data,left_->Next()->data,left_->tupleLen());
+        memcpy(record->data+left_->tupleLen(),right_->Next()->data,right_->tupleLen());
         return record;
     }
 
