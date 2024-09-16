@@ -72,14 +72,14 @@ struct Value {
     }
 };
 
-enum CompOp { OP_EQ, OP_NE, OP_LT, OP_GT, OP_LE, OP_GE };
+enum CompOp { OP_EQ, OP_NE, OP_LT, OP_GT, OP_LE, OP_GE };   // 语句中条件的比较运算符类型
 
 struct Condition {
-    TabCol lhs_col;   // left-hand side column
-    CompOp op;        // comparison operator
+    TabCol lhs_col;   // left-hand side column,语句中的左侧列名
+    CompOp op;        // comparison operator，语句中的比较运算符
     bool is_rhs_val;  // true if right-hand side is a value (not a column)
-    TabCol rhs_col;   // right-hand side column
-    Value rhs_val;    // right-hand side value
+    TabCol rhs_col;   // right-hand side column，语句中的右侧列名
+    Value rhs_val;    // right-hand side value，语句中的右侧值
 };
 
 struct SetClause {

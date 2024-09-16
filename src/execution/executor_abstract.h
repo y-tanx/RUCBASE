@@ -44,6 +44,7 @@ class AbstractExecutor {
 
     virtual ColMeta get_col_offset(const TabCol &target) { return ColMeta();};
 
+    // 从rec_cols中找到target对应的字段元数据，target存储了表名和字段名
     std::vector<ColMeta>::const_iterator get_col(const std::vector<ColMeta> &rec_cols, const TabCol &target) {
         auto pos = std::find_if(rec_cols.begin(), rec_cols.end(), [&](const ColMeta &col) {
             return col.tab_name == target.tab_name && col.name == target.col_name;

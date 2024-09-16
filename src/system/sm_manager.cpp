@@ -266,7 +266,7 @@ void SmManager::create_index(const std::string& tab_name, const std::vector<std:
         index_meta.col_tot_len += it->len;
         index_meta.col_num ++ ;
     }
-    if (context && !context->lock_mgr_->lock_exclusive_on_table(context->txn_, disk_manager_->get_path2fd(tab_name)))
+    if (context && !context->lock_mgr_->lock_exclusive_on_table(context->txn_, disk_manager_->get_fd2path(tab_name)))
         throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::LOCK_ON_SHIRINKING);
     ix_manager_->create_index(tab_name, col_meta);
     tab_meta.indexes.push_back(index_meta);

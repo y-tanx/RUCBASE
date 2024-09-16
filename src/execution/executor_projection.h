@@ -39,12 +39,48 @@ class ProjectionExecutor : public AbstractExecutor {
         len_ = curr_offset;
     }
 
-    void beginTuple() override {}
+    bool is_end() const override { return prev_->is_end(); }
 
-    void nextTuple() override {}
+    size_t tupleLen() const override { return len_; }
+
+    const std::vector<ColMeta> &cols() const override { return cols_; }
+
+    const std::unique_ptr<AbstractExecutor> &get_child()
+    {
+        return prev_;
+    }
+
+    void beginTuple() override {
+        prev_->beginTuple();
+    }
+
+    void nextTuple() override {
+        if (prev_->is_end()) 
+        {
+            throw std::runtime_error("No more records available.");
+        }
+        prev_->nextTuple();
+    }
 
     std::unique_ptr<RmRecord> Next() override {
-        return nullptr;
+        // 构造一个投影记录
+        if(prev_->is_end())
+        {
+            throw std::runtime_error("No more records available.");
+        }
+        auto& prev_cols = prev_->cols();    // 获得字段
+        auto prev_rec = prev_->Next();  // 获得元组
+        // 构造投影记录
+        auto proj_rec = std::make_unique<RmRecord>(len_);
+        // 将原纪录中的数据复制到投影记录中
+        for(size_t i = 0; i < cols_.size(); ++i)
+        {
+            auto prev_col_idx = sel_idxs_[i];
+            auto& prev_col = prev_cols[prev_col_idx];
+            auto& proj_col = cols_[i];
+            memcpy(proj_rec->data + proj_col.offset, prev_rec->data + prev_col.offset, prev_col.len);
+        }
+        return proj_rec;
     }
 
     Rid &rid() override { return _abstract_rid; }

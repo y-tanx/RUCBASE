@@ -86,7 +86,7 @@ class DiskManager {
      * @param {int} fd 文件对应的句柄
      */
     page_id_t get_fd2pageno(int fd) { return fd2pageno_[fd]; }
-    int get_path2fd(const std::string& path) { return path2fd_[path]; }
+    int get_fd2path(const std::string& path) { return path2fd_[path]; }
 
     static constexpr int MAX_FD = 8192;
 

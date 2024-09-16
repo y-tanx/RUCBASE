@@ -118,7 +118,7 @@ void *client_handler(void *sock_fd) {
         Context *context = new Context(lock_manager.get(), log_manager.get(), nullptr, data_send, &offset);
         // Lab 3 need to remove transaction part
         // Lab 4 need to restart transaction
-        // SetTransaction(&txn_id, context);
+        SetTransaction(&txn_id, context);
 
         // 用于判断是否已经调用了yy_delete_buffer来删除buf
         bool finish_analyze = false;
@@ -180,10 +180,10 @@ void *client_handler(void *sock_fd) {
             break;
         }
         // 如果是单条语句，需要按照一个完整的事务来执行，所以执行完当前语句后，自动提交事务
-        // if(context->txn_->get_txn_mode() == false)
-        // {
-        //     txn_manager->commit(context->txn_, context->log_mgr_);
-        // }
+        if(context->txn_->get_txn_mode() == false)
+        {
+            txn_manager->commit(context->txn_, context->log_mgr_);
+        }
     }
 
     // Clear
@@ -216,7 +216,7 @@ void start_server() {
     s_addr_in.sin_port = htons(SOCK_PORT);
     fd_temp = bind(sockfd_server, (struct sockaddr *)(&s_addr_in), sizeof(s_addr_in));
     if (fd_temp == -1) {
-        std::cout << "Bind error!" << std::endl;
+        std::cout << "Bind error: " << strerror(errno) << std::endl;
         exit(1);
     }
 

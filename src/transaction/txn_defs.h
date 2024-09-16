@@ -119,6 +119,13 @@ struct std::hash<LockDataId> {
 /* 事务回滚原因 */
 enum class AbortReason { LOCK_ON_SHIRINKING = 0, UPGRADE_CONFLICT, DEADLOCK_PREVENTION };
 
+// 打印 LockDataId 对象的函数
+inline void printLockDataId(const LockDataId& lockDataId) {
+    std::cout << "LockDataId(fd: " << lockDataId.fd_ 
+            << ", type: " << (lockDataId.type_ == LockDataType::TABLE ? "TABLE" : "RECORD")
+            << ", rid: (page_no: " << lockDataId.rid_.page_no << ", slot_no: " << lockDataId.rid_.slot_no << "))" << std::endl;
+}
+
 /* 事务回滚异常，在rmdb.cpp中进行处理 */
 class TransactionAbortException : public std::exception {
     txn_id_t txn_id_;

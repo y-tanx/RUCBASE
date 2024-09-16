@@ -21,7 +21,7 @@ class LockManager {
     enum class LockMode { SHARED, EXLUCSIVE, INTENTION_SHARED, INTENTION_EXCLUSIVE, S_IX };
 
     /* 用于标识加锁队列中排他性最强的锁类型，例如加锁队列中有SHARED和EXLUSIVE两个加锁操作，则该队列的锁模式为X */
-    enum class GroupLockMode { NON_LOCK, IS, IX, S, X, SIX};
+    enum class  GroupLockMode { NON_LOCK, IS, IX, S, X, SIX};
 
     /* 事务的加锁申请 */
     class LockRequest {

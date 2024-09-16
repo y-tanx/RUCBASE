@@ -62,10 +62,15 @@ class IndexScanExecutor : public AbstractExecutor {
             }
         }
         fed_conds_ = conds_;
+
+        if(context)
+        {
+            context->lock_mgr_->lock_shared_on_table(context->txn_, fh_->GetFd());
+        }
     }
 
     void beginTuple() override {
-        
+       
     }
 
     void nextTuple() override {
@@ -77,4 +82,5 @@ class IndexScanExecutor : public AbstractExecutor {
     }
 
     Rid &rid() override { return rid_; }
+
 };
