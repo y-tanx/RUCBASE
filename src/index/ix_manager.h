@@ -44,10 +44,6 @@ class IxManager {
         return index_name;
     }
 
-     std::string get_index_name(const std::string &filename, int index_no) {
-        return filename + '.' + std::to_string(index_no) + ".idx";
-    }
-
     bool exists(const std::string &filename, const std::vector<ColMeta>& index_cols) {
         auto ix_name = get_index_name(filename, index_cols);
         return disk_manager_->is_file(ix_name);

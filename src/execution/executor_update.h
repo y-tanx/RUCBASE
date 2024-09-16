@@ -39,65 +39,62 @@ class UpdateExecutor : public AbstractExecutor {
     }
     std::unique_ptr<RmRecord> Next() override {
         // 删除旧记录上的索引，更新记录，然后将索引插入到新记录上
-        // 缓存表上的索引
-        std::vector<IxIndexHandle*> index_handles(tab_.indexes.size(), nullptr);
-        for(size_t i = 0; i < tab_.indexes.size(); ++i)
-        {
-            auto& index = tab_.indexes[i];  // 获得索引元数据
-            index_handles[i] = sm_manager_->ihs_.at(
-                sm_manager_->get_ix_manager()->get_index_name(tab_name_, index.cols)
-            ).get();    // 将索引的句柄加入到数组中
-        }
-        // 遍历需要更新的所有记录
-        for(auto& rid : rids_)
-        {
-            auto rec = fh_->get_record(rid, context_);  // 首先获得记录
-            if(!rec) continue;
-            // 删除旧记录上的索引
-            for(size_t i = 0; i < tab_.indexes.size(); ++i)
-            {
-                auto& index = tab_.indexes[i];  // 获得索引i的元数据
-                auto ih = index_handles[i]; // 获得索引i的句柄
-                // 提取索引列的数据，逐列遍历，构造key记录rec中索引i的索引项
-                std::vector<char> key(index.col_tot_len);
-                int offest = 0;
-                for(size_t j = 0; j < index.col_num; ++j)
-                {
-                    std::memcpy(key.data() + offest, rec->data + index.cols[j].offset, index.cols[j].len);
-                    offest += index.cols[j].len;
-                }
-                ih->delete_entry(key.data(), context_->txn_);
+        // Get all necessary index files
+        std::vector<IxIndexHandle *> ihs(tab_.cols.size(), nullptr);
+        std::vector<std::pair<bool,Value>> values(tab_.cols.size());
+        for(auto i:values)i.first=false;
+        for (auto &set_clause : set_clauses_) {
+            auto lhs_col = tab_.get_col(set_clause.lhs.col_name);
+            if (lhs_col->index) {
+                size_t lhs_col_idx = lhs_col - tab_.cols.begin();
+                // lab3 task3 Todo
+                // 获取需要的索引句柄,填充vector ihs
+                auto index = tab_.indexes[lhs_col_idx];
+                ihs[lhs_col_idx]=sm_manager_->ihs_.at(sm_manager_->get_ix_manager()->get_index_name(tab_name_, index.cols)).get();
+                // lab3 task3 Todo end
             }
+            for(int i=0;i<tab_.cols.size();i++){
+                if(set_clause.lhs.col_name==tab_.cols[i].name){
+                    values[i].first=true;
+                    values[i].second=set_clause.rhs;
+                    break;
+                }
+            }
+        }
+        // Update each rid from record file and index file
+        for (auto &rid : rids_) {
+            auto rec = fh_->get_record(rid, context_);
+            // lab3 task3 Todo
+            // Remove old entry from index
+                // WriteRecord* writerecord=new WriteRecord(WType::UPDATE_TUPLE,tab_name_,rid,*rec.get());
+                // context_->txn_->AppendWriteRecord(writerecord);
+
+            for(int i=0;i<tab_.cols.size();i++){
+                if(!ihs[i])continue;
+                ihs[i]->delete_entry(rec->data+tab_.cols[i].offset,nullptr);
+            }
+            // lab3 task3 Todo end
 
             // record a update operation into the transaction
-            WriteRecord* wr = new WriteRecord(WType::UPDATE_TUPLE, tab_name_, rid, *rec);
-            context_->txn_->append_write_record(wr);
+            RmRecord update_record{rec->size};
+            memcpy(update_record.data, rec->data, rec->size);
 
-            // 更新记录
-            RmRecord new_record{rec->size};
-            memcpy(new_record.data, rec->data, rec->size);
-            // 遍历set语句，获得要修改的列和对应的值，构造new_record
-            for(auto& set_clause : set_clauses_)
-            {
-                auto lhs_col = tab_.get_col(set_clause.lhs.col_name);   // 获得左侧语句中的列名
-                memcpy(new_record.data + lhs_col->offset, set_clause.rhs.raw->data, lhs_col->len);
+            // lab3 task3 Todo
+            // Update record in record file
+            for(int i=0;i<tab_.cols.size();i++){
+                if(!values[i].first)continue;
+                memcpy(rec->data+tab_.cols[i].offset,values[i].second.raw->data,tab_.cols[i].len);
             }
-            // 用new_record更新记录号为rid的记录
-            fh_->update_record(rid, new_record.data, context_);
-            // 在新记录中插入索引
-            for(size_t i = 0; i < tab_.indexes.size(); ++i)
-            {
-                auto& index = tab_.indexes[i];
-                auto ih = index_handles[i];
-                std::vector<char> key(index.col_tot_len);
-                int offest = 0;
-                for(size_t j = 0; j < index.col_num; ++j)
-                {
-                    std::memcpy(key.data() + offest, new_record.data + index.cols[j].offset, index.cols[j].len);
-                    offest += index.cols[j].len;
-                }
-                ih->insert_entry(key.data(), rid, context_->txn_);
+            fh_->update_record(rid,rec->data,context_);
+            // lab3 task3 Todo end
+
+            // lab3 task3 Todo
+            // Insert new entry into index
+            for(int i=0;i<tab_.cols.size();i++){
+                if(!ihs[i])continue;
+                ihs[i]->insert_entry(rec->data+tab_.cols[i].offset,rid,nullptr);
             }
+            // lab3 task3 Todo end
         }
         return nullptr;
     }

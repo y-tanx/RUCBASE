@@ -250,29 +250,61 @@ void SmManager::drop_table(const std::string& tab_name, Context* context) {
     flush_meta();   // 写回到文件中
 }
 
-/**
- * @description: 创建索引
- * @param {string&} tab_name 表的名称
- * @param {vector<string>&} col_names 索引包含的字段名称
- * @param {Context*} context
- */
 void SmManager::create_index(const std::string& tab_name, const std::vector<std::string>& col_names, Context* context) {
-    auto& tab_meta = db_.get_table(tab_name);
+    // 获取表元数据
+    TabMeta &tab = db_.get_table(tab_name);
     IndexMeta index_meta = {tab_name};
-    std::vector<ColMeta> &col_meta = index_meta.cols;
-    for (auto& col : col_names) {
-        auto it = tab_meta.get_col(col);
-        col_meta.push_back(*it);
-        index_meta.col_tot_len += it->len;
-        index_meta.col_num ++ ;
+    std::vector<ColMeta>& col_meta = index_meta.cols;
+    
+    // 为每个列创建索引元数据
+    for (auto& col_name : col_names) {
+        auto col = tab.get_col(col_name);
+        col_meta.push_back(*col);  // 将列元数据加入 col_meta
+        index_meta.col_tot_len += col->len;
+        index_meta.col_num++;
     }
     if (context && !context->lock_mgr_->lock_exclusive_on_table(context->txn_, disk_manager_->get_fd2path(tab_name)))
         throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::LOCK_ON_SHIRINKING);
-    ix_manager_->create_index(tab_name, col_meta);
-    tab_meta.indexes.push_back(index_meta);
-    ihs_[ix_manager_->get_index_name(tab_name, col_meta)] = ix_manager_->open_index(tab_name, col_meta);
+    
+    // 创建索引文件
+    ix_manager_->create_index(tab_name, col_meta);  // 只需创建一次索引
+    
+    // 打开索引文件并保存句柄
+    auto ih = ix_manager_->open_index(tab_name, col_meta);
+    
+    // 获取记录文件句柄
+    auto file_handle = fhs_.at(tab_name).get();
+    
+    // 扫描表中的每一条记录，并将其插入索引
+    for (RmScan rm_scan(file_handle); !rm_scan.is_end(); rm_scan.next()) {
+        auto rec = file_handle->get_record(rm_scan.rid(), context);  // 获取记录
+        
+        // 获取联合键的值（多个列拼接在一起）
+        std::vector<char> key;
+        for (const auto& col : col_meta) {
+            const char* col_data = rec->data + col.offset;
+            key.insert(key.end(), col_data, col_data + col.len);
+        }
+        
+        // 将键和值插入索引，值是记录的 RID
+        ih->insert_entry(key.data(), rm_scan.rid(), context->txn_);
+    }
+    
+    // 保存索引句柄
+    auto index_name = ix_manager_->get_index_name(tab_name, col_meta);
+    assert(ihs_.count(index_name) == 0);
+    ihs_.emplace(index_name, std::move(ih));  // 使用 std::move 避免拷贝
+    
+    // 更新表元数据，标记列已经创建索引
+    tab.indexes.push_back(index_meta);
+    for (auto& col : col_meta) {
+        tab.get_col(col.name)->index = true;
+    }
+    
+    // 刷新元数据到磁盘
     flush_meta();
 }
+
 
 /**
  * @description: 删除索引
@@ -281,7 +313,7 @@ void SmManager::create_index(const std::string& tab_name, const std::vector<std:
  * @param {Context*} context
  */
 void SmManager::drop_index(const std::string& tab_name, const std::vector<std::string>& col_names, Context* context) {
-    // 关闭索引文件然后删除它，清空ihs_中对应的index
+    // // 关闭索引文件然后删除它，清空ihs_中对应的index
     std::string index_name = ix_manager_->get_index_name(tab_name, col_names);
     // 关闭并删除索引文件
     ix_manager_->close_index(ihs_[index_name].get());
@@ -290,8 +322,13 @@ void SmManager::drop_index(const std::string& tab_name, const std::vector<std::s
     TabMeta& tab = db_.get_table(tab_name);
     tab.indexes.erase(tab.get_index_meta(col_names));
     ihs_.erase(index_name);
+    for(auto col_name : col_names)
+    {
+        auto index_col = tab.get_col(col_name);
+        index_col->index = false;
+    }
     // 写回文件
-    flush_meta();
+    flush_meta(); 
 }
 
 /**
