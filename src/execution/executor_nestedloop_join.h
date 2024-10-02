@@ -87,11 +87,6 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
 
     std::unique_ptr<RmRecord> Next() override {
         auto record = std::make_unique<RmRecord>(len_);
-        // auto left_rec = left_->Next();
-        // auto right_rec = right_->Next();
-
-        // memcpy(record->data, left_rec->data, left_rec->size);
-        // memcpy(record->data + left_rec->size, right_rec->data, right_rec->size);
         memcpy(record->data,left_->Next()->data,left_->tupleLen());
         memcpy(record->data+left_->tupleLen(),right_->Next()->data,right_->tupleLen());
         return record;
