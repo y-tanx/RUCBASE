@@ -27,11 +27,7 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid& rid, Context* cont
         throw RecordNotFoundError(rid.page_no, rid.slot_no);
     }
     auto record = std::make_unique<RmRecord>(file_hdr_.record_size);
-    // 判断是否存在记录
-    if(!Bitmap::is_set(page_handle.bitmap, rid.slot_no))
-    {
-        throw RecordNotFoundError(rid.page_no, rid.slot_no);
-    }
+
     // 构造这个record
     memcpy(record->data, page_handle.get_slot(rid.slot_no), file_hdr_.record_size);
     record->size = file_hdr_.record_size;
@@ -75,11 +71,20 @@ Rid RmFileHandle::insert_record(char* buf, Context* context) {
  * @param {char*} buf 要插入记录的数据
  */
 void RmFileHandle::insert_record(const Rid& rid, char* buf) {
+    // 获得rid.page_no对应的page handle
     auto page_handle = fetch_page_handle(rid.page_no);
     auto record = page_handle.get_slot(rid.slot_no);
-    Bitmap::set(page_handle.bitmap, rid.slot_no);
+
+    // 设置bitmap的第slot_no位，表示这个槽装入了记录
+    Bitmap::set(page_handle.bitmap, rid.slot_no);   
+
+    // 更新页表的num_record信息
     page_handle.page_hdr->num_records++;
+
+    // 将buf读入到rid指示的位置处
     memcpy(record, buf, file_hdr_.record_size);
+
+    // 判断页面是否已满
     if(page_handle.page_hdr->num_records == file_hdr_.num_records_per_page)
     {
         file_hdr_.first_free_page_no = page_handle.page_hdr->next_free_page_no;

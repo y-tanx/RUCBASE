@@ -37,7 +37,7 @@ class DeleteExecutor : public AbstractExecutor {
     }
 
     std::unique_ptr<RmRecord> Next() override {
-    // 删除记录组rids,首先需要删除这些记录上的索引，然后删除这些记录
+    // 删除记录组rids，需要先删除这些记录上的索引，然后再删除这些记录
     // 首先获得所有的索引句柄
     // Get all index files
         std::vector<IxIndexHandle *> ihs(tab_.cols.size(), nullptr);

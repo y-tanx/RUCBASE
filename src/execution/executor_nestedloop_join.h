@@ -53,6 +53,9 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
     const std::vector<ColMeta> &cols() const override { return cols_; }
 
     
+    /**
+     * @brief 初始化连接操作，调用左右表的beginTuple获得每个表的第一个元组，然后调用filter开始过滤
+     */
     void beginTuple() override {
         left_->beginTuple();
         if (left_->is_end()) {
@@ -62,6 +65,9 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
         filter_next_tuple();
     }
 
+    /**
+     * @brief 寻找下一对连接的元组，左表为外表，因此当右表已经结束时，移动左表到下一个元组，从头重新开始扫描右表，再调用filter过滤
+     */
     void nextTuple() override {
         right_->nextTuple();
         if (right_->is_end()) {
@@ -71,7 +77,9 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
         filter_next_tuple();
     }
 
-    // 过滤符合条件的元组
+    /**
+     * @brief 以左表为外表，遍历右表，根据连接条件fed_conds_，寻找一个可以与左表记录连接的右表记录
+     */
     void filter_next_tuple() {
         while (!is_end()) {
             if (eval_conds(cols_, fed_conds_, left_->Next().get(), right_->Next().get())) {

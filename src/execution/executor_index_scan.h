@@ -77,17 +77,20 @@ class IndexScanExecutor : public AbstractExecutor {
 
 
     void beginTuple() override {
-    // 获取索引句柄
-    auto ih = sm_manager_->ihs_.at(sm_manager_->get_ix_manager()->get_index_name(tab_name_, index_meta_.cols)).get();
+        // 获取索引句柄
+        auto ih = sm_manager_->ihs_.at(sm_manager_->get_ix_manager()->get_index_name(tab_name_, index_meta_.cols)).get();
 
-    Iid lower = ih->leaf_begin();
-    Iid upper = ih->leaf_end();
-    bool has_index_cond = false;
+        // 基于索引的扫描：寻找满足谓词条件的叶子节点，由于叶子节点是连续有序的，因此只需要找到满足条件的第一个和最后一个叶子节点
+        // 即可获得满足谓词条件的记录集合
+        Iid lower = ih->leaf_begin();
+        Iid upper = ih->leaf_end();
+        bool has_index_cond = false;
 
-    for (auto &index_name : index_col_names_) {
+        for (auto &index_name : index_col_names_) {
             auto index_col = tab_.get_col(index_name);
 
             for (auto &cond : fed_conds_) {
+                // 只有cond左侧为索引字段，右侧为值才能使用索引扫描。注意：索引扫描不支持OP_NE运算
                 if (cond.is_rhs_val && cond.op != OP_NE && cond.lhs_col.col_name == index_col->name) {
                     char *rhs_key = cond.rhs_val.raw->data;
 
@@ -124,15 +127,15 @@ class IndexScanExecutor : public AbstractExecutor {
             }
         }
 
-        // 根据确定的边界初始化扫描
+        // 根据确定的边界初始化索引扫描
         scan_ = std::make_unique<IxScan>(ih, lower, upper, sm_manager_->get_bpm());
 
-        // 获取第一个匹配的记录
+        // 获取第一个满足谓词条件的记录
         while (!scan_->is_end()) {
             rid_ = scan_->rid();
             auto rec = fh_->get_record(rid_, context_);
 
-            // 评估非索引条件
+            // 判断记录是否满足谓词条件
             if (eval_conds(cols_, fed_conds_, rec.get())) {
                 break;
             }

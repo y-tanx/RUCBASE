@@ -45,7 +45,7 @@ void SmManager::create_db(const std::string& db_name) {
     if (chdir(db_name.c_str()) < 0) {  // 进入名为db_name的目录
         throw UnixError();
     }
-    //创建系统目录
+    // 为数据库创建DBMeta
     DbMeta *new_db = new DbMeta();
     new_db->name_ = db_name;
 
@@ -85,7 +85,6 @@ void SmManager::drop_db(const std::string& db_name) {
  * @param {string&} db_name 数据库名称，与文件夹同名
  */
 void SmManager::open_db(const std::string& db_name) {
-    // 首先打开数据库对应的文件夹，加载数据库元数据
     if(!is_dir(db_name.c_str()))
     {
         throw DatabaseNotFoundError(db_name.c_str());
@@ -95,7 +94,7 @@ void SmManager::open_db(const std::string& db_name) {
     {
         throw UnixError();
     }
-    // 打开数据库文件，并加载元数据到db_
+    // 打开数据库元数据文件，并加载元数据到db_
     std::ifstream ifs(DB_META_NAME);
     ifs >> db_; // 加载数据库元数据
     ifs.close();

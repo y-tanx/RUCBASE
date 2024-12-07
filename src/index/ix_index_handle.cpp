@@ -514,19 +514,20 @@ bool IxIndexHandle::adjust_root(IxNodeHandle *old_root_node) {
     // 3. 除了上述两种情况，不需要进行操作
 
     bool need_delete = false;
-    // old_root_node是内部节点
+    // 如果old_root_node只有一个孩子节点，则删除该根节点，并以孩子节点为新的根节点
     if(!old_root_node->is_leaf_page() && old_root_node->get_size() == 1)
     {
-        page_id_t new_root_no = old_root_node->remove_and_return_only_child();
+        page_id_t new_root_no = old_root_node->remove_and_return_only_child();  // 孩子节点的页号
         update_root_page_no(new_root_no);
         auto new_root_node = fetch_node(new_root_no);
         new_root_node->set_parent_page_no(INVALID_PAGE_ID);  // 更新父亲节点信息
-        release_node_handle(*old_root_node);    // 更新file_hdr的num_pages
+        release_node_handle(*old_root_node);    // 删除old_root_node，因此要更新file_hdr的num_pages
         buffer_pool_manager_->unpin_page(new_root_node->get_page_id(), true);
         need_delete = true;
         
     }else if(old_root_node->is_leaf_page() && old_root_node->get_size() == 0)
     {
+        // 若old_root_node是叶子节点（实际上当前B+树只有这个节点），且删除后old_root_node没有键值对了，则需要修改root_page_no为INVALID
         update_root_page_no(INVALID_PAGE_ID);   // 不需要删除old_root_node了
     }
 
@@ -626,7 +627,7 @@ bool IxIndexHandle::coalesce(IxNodeHandle **neighbor_node, IxNodeHandle **node, 
 /**
  * @brief 这里把iid转换成了rid，即iid的slot_no作为node的rid_idx(key_idx)
  * node其实就是把slot_no作为键值对数组的下标
- * 换而言之，每个iid对应的索引槽存了一对(key,rid)，指向了(要建立索引的属性首地址,插入/删除记录的位置)
+ * 换而言之，每个iid对应的索引槽存了一对(key_,rid)，指向了(要建立索引的属性首地址,插入/删除记录的位置)
  *
  * @param iid
  * @return Rid
